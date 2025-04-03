@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Business, SearchRequest, TaskStatus } from '../types';
-import * as api from '../services/api';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { Business } from '../types';
+import { businessAPI } from '../services/api';
 
+// Interface definitions for context types
 interface AppContextType {
   categories: string[];
   locations: string[];
@@ -12,6 +13,7 @@ interface AppContextType {
   storedBusinesses: Business[];
   isLoading: boolean;
   isPolling: boolean;
+  isLoadingMore: boolean;
   addCategory: (category: string) => void;
   removeCategory: (category: string) => void;
   addLocation: (location: string) => void;
@@ -20,11 +22,23 @@ interface AppContextType {
   selectLocation: (location: string, selected: boolean) => void;
   startSearch: () => Promise<void>;
   exportData: (format: string) => Promise<void>;
-  loadStoredBusinesses: () => Promise<void>;
+  loadStoredBusinesses: (page?: number) => Promise<void>;
+  loadMoreBusinesses: () => Promise<void>;
   loadBusinessesByCategory: (category: string) => Promise<void>;
+  loadMoreBusinessesByCategory: (category: string) => Promise<void>;
   loadBusinessesByCity: (city: string) => Promise<void>;
+  loadMoreBusinessesByCity: (city: string) => Promise<void>;
+  loadBusinessesByEmailStatus: (hasEmail: boolean, page?: number) => Promise<void>;
+  loadBusinessesByCountry: (country: string, page?: number) => Promise<void>;
+  resetFilters: () => void;
   isViewingStoredData: boolean;
   setIsViewingStoredData: (value: boolean) => void;
+  currentCategory: string | null;
+  currentCity: string | null;
+  isEmailFilterActive: boolean;
+  hasEmail: boolean | null;
+  isCountryFilterActive: boolean;
+  selectedCountry: string | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -37,6 +51,35 @@ export const useAppContext = () => {
   return context;
 };
 
+// Define the SearchRequest interface
+interface SearchRequest {
+  categories: string[];
+  locations: string[];
+}
+
+interface TaskStatus {
+  id: string;
+  category: string;
+  location: string;
+  status: string;
+  processedItems: number;
+  totalItems: number;
+  message?: string;
+}
+
+interface PaginatedResponse<T> {
+  content: T[];
+  pageable: {
+    pageNumber: number;
+    pageSize: number;
+  };
+  last: boolean;
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
 export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [categories, setCategories] = useState<string[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
@@ -47,7 +90,18 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [storedBusinesses, setStoredBusinesses] = useState<Business[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isViewingStoredData, setIsViewingStoredData] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const PAGE_SIZE = 50; // Number of businesses to load per page
+  const [currentCategory, setCurrentCategory] = useState<string | null>(null);
+  const [currentCity, setCurrentCity] = useState<string | null>(null);
+  const [isEmailFilterActive, setIsEmailFilterActive] = useState<boolean>(false);
+  const [hasEmail, setHasEmail] = useState<boolean | null>(null);
+  const [isCountryFilterActive, setIsCountryFilterActive] = useState<boolean>(false);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Poll for tasks status when searching
   useEffect(() => {
@@ -56,18 +110,20 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     if (isPolling) {
       interval = setInterval(async () => {
         try {
-          const tasks = await api.getTasks();
-          setTasks(tasks);
+          const taskResponse = await businessAPI.getTasks();
+          const taskResults = taskResponse.data;
+          setTasks(taskResults);
           
-          const results = await api.getResults();
-          setBusinesses(results.businesses);
+          const resultsResponse = await businessAPI.getResults();
+          const resultsData = resultsResponse.data;
+          setBusinesses(resultsData.businesses);
           
           // Check if all tasks are completed or failed
-          const allDone = tasks.every(task => 
+          const allDone = taskResults.every((task: TaskStatus) => 
             task.status === 'COMPLETED' || task.status === 'FAILED'
           );
           
-          if (allDone && tasks.length > 0) {
+          if (allDone && taskResults.length > 0) {
             setIsPolling(false);
           }
         } catch (error) {
@@ -136,15 +192,16 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         locations: selectedLocations,
       };
       
-      await api.searchBusinesses(request);
+      // Use the new API service
+      await businessAPI.search(request);
       setIsPolling(true);
       
       // Initial fetch of tasks and results
-      const tasks = await api.getTasks();
-      setTasks(tasks);
+      const taskResponse = await businessAPI.getTasks();
+      setTasks(taskResponse.data);
       
-      const results = await api.getResults();
-      setBusinesses(results.businesses);
+      const resultsResponse = await businessAPI.getResults();
+      setBusinesses(resultsResponse.data.businesses);
     } catch (error) {
       console.error('Error starting search:', error);
     } finally {
@@ -160,7 +217,8 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
     try {
       setIsLoading(true);
-      const blob = await api.exportResults(format);
+      const response = await businessAPI.exportResults(format);
+      const blob = response.data;
       
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -182,12 +240,35 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     }
   };
 
-  // Load stored businesses from the database
-  const loadStoredBusinesses = async () => {
+  // Load stored businesses from the database (first page)
+  const loadStoredBusinesses = async (page: number = 0) => {
     setIsLoading(true);
     try {
-      const data = await api.getStoredBusinesses();
-      setStoredBusinesses(data);
+      // Reset filters when loading all businesses
+      setCurrentCategory(null);
+      setCurrentCity(null);
+      setHasEmail(null);
+      setSelectedCountry(null);
+      setIsEmailFilterActive(false);
+      setIsCountryFilterActive(false);
+      
+      // Reset pagination if loading first page
+      if (page === 0) {
+        setCurrentPage(0);
+        const response = await businessAPI.getStoredBusinesses(0, PAGE_SIZE);
+        setStoredBusinesses(response.data);
+        setHasMore(response.data.length === PAGE_SIZE);
+      } else {
+        const response = await businessAPI.getStoredBusinesses(page, PAGE_SIZE);
+        if (page === 0) {
+          setStoredBusinesses(response.data);
+        } else {
+          setStoredBusinesses(prev => [...prev, ...response.data]);
+        }
+        setCurrentPage(page);
+        setHasMore(response.data.length === PAGE_SIZE);
+      }
+      
       setIsViewingStoredData(true);
     } catch (error) {
       console.error('Error loading stored businesses:', error);
@@ -196,12 +277,44 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     }
   };
 
+  // Load more businesses (next page)
+  const loadMoreBusinesses = async () => {
+    if (isLoadingMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const response = await businessAPI.getStoredBusinesses(nextPage, PAGE_SIZE);
+      const data = response.data;
+      
+      if (data.length > 0) {
+        setStoredBusinesses([...storedBusinesses, ...data]);
+        setCurrentPage(nextPage);
+      }
+    } catch (error) {
+      console.error('Error loading more businesses:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   // Load businesses by category from the database
   const loadBusinessesByCategory = async (category: string) => {
     setIsLoading(true);
     try {
-      const data = await api.getBusinessesByCategory(category);
-      setStoredBusinesses(data);
+      // Reset pagination when loading businesses by category
+      setCurrentPage(0);
+      setCurrentCategory(category);
+      setCurrentCity(null);
+      
+      // Reset other filters
+      setIsEmailFilterActive(false);
+      setHasEmail(null);
+      setIsCountryFilterActive(false);
+      setSelectedCountry(null);
+      
+      const response = await businessAPI.getBusinessesByCategory(category, 0, PAGE_SIZE);
+      setStoredBusinesses(response.data);
       setIsViewingStoredData(true);
     } catch (error) {
       console.error(`Error loading businesses by category ${category}:`, error);
@@ -210,18 +323,152 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     }
   };
 
+  // Load more businesses by category from the database
+  const loadMoreBusinessesByCategory = async (category: string) => {
+    if (isLoadingMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const response = await businessAPI.getBusinessesByCategory(category, nextPage, PAGE_SIZE);
+      const data = response.data;
+      
+      if (data.length > 0) {
+        setStoredBusinesses([...storedBusinesses, ...data]);
+        setCurrentPage(nextPage);
+        setCurrentCategory(category);
+      }
+    } catch (error) {
+      console.error(`Error loading more businesses by category ${category}:`, error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   // Load businesses by city from the database
   const loadBusinessesByCity = async (city: string) => {
     setIsLoading(true);
     try {
-      const data = await api.getBusinessesByCity(city);
-      setStoredBusinesses(data);
+      // Reset pagination when loading businesses by city
+      setCurrentPage(0);
+      setCurrentCity(city);
+      setCurrentCategory(null);
+      
+      // Reset other filters
+      setIsEmailFilterActive(false);
+      setHasEmail(null);
+      setIsCountryFilterActive(false);
+      setSelectedCountry(null);
+      
+      const response = await businessAPI.getBusinessesByCity(city, 0, PAGE_SIZE);
+      setStoredBusinesses(response.data);
       setIsViewingStoredData(true);
     } catch (error) {
       console.error(`Error loading businesses by city ${city}:`, error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Load more businesses by city from the database
+  const loadMoreBusinessesByCity = async (city: string) => {
+    if (isLoadingMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const response = await businessAPI.getBusinessesByCity(city, nextPage, PAGE_SIZE);
+      const data = response.data;
+      
+      if (data.length > 0) {
+        setStoredBusinesses([...storedBusinesses, ...data]);
+        setCurrentPage(nextPage);
+        setCurrentCity(city);
+      }
+    } catch (error) {
+      console.error(`Error loading more businesses by city ${city}:`, error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Load businesses by email status (with or without email)
+  const loadBusinessesByEmailStatus = async (hasEmail: boolean, page: number = 0) => {
+    try {
+      setIsLoading(true);
+      setIsEmailFilterActive(true);
+      setHasEmail(hasEmail);
+      setIsViewingStoredData(true);
+      
+      // Reset other filters
+      setCurrentCategory(null);
+      setCurrentCity(null);
+      setIsCountryFilterActive(false);
+      setSelectedCountry(null);
+      
+      try {
+        const response = await businessAPI.getBusinessesByEmailStatus(hasEmail, page, PAGE_SIZE);
+        const data = response.data;
+        
+        if (page === 0) {
+          setStoredBusinesses(data);
+        } else {
+          setStoredBusinesses(prev => [...prev, ...data]);
+        }
+        
+        setCurrentPage(page);
+        setHasMore(data.length === PAGE_SIZE);
+      } catch (error) {
+        console.error('Error loading businesses by email status:', error);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load businesses by country
+  const loadBusinessesByCountry = async (country: string, page: number = 0) => {
+    try {
+      setIsLoading(true);
+      setIsCountryFilterActive(true);
+      setSelectedCountry(country);
+      setIsViewingStoredData(true);
+      
+      // Reset other filters
+      setCurrentCategory(null);
+      setCurrentCity(null);
+      setIsEmailFilterActive(false);
+      setHasEmail(null);
+      
+      try {
+        const response = await businessAPI.getBusinessesByCountry(country, page, PAGE_SIZE);
+        const data = response.data;
+        
+        if (page === 0) {
+          setStoredBusinesses(data);
+        } else {
+          setStoredBusinesses(prev => [...prev, ...data]);
+        }
+        
+        setCurrentPage(page);
+        setHasMore(data.length === PAGE_SIZE);
+      } catch (error) {
+        console.error('Error loading businesses by country:', error);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Reset all filters
+  const resetFilters = () => {
+    setCurrentCategory(null);
+    setCurrentCity(null);
+    setHasEmail(null);
+    setSelectedCountry(null);
+    setIsEmailFilterActive(false);
+    setIsCountryFilterActive(false);
+    loadStoredBusinesses(0);
   };
 
   const contextValue: AppContextType = {
@@ -234,6 +481,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     storedBusinesses,
     isLoading,
     isPolling,
+    isLoadingMore,
     addCategory,
     removeCategory,
     addLocation,
@@ -243,10 +491,22 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     startSearch,
     exportData,
     loadStoredBusinesses,
+    loadMoreBusinesses,
     loadBusinessesByCategory,
+    loadMoreBusinessesByCategory,
     loadBusinessesByCity,
+    loadMoreBusinessesByCity,
+    loadBusinessesByEmailStatus,
+    loadBusinessesByCountry,
+    resetFilters,
     isViewingStoredData,
     setIsViewingStoredData,
+    currentCategory,
+    currentCity,
+    isEmailFilterActive,
+    hasEmail,
+    isCountryFilterActive,
+    selectedCountry,
   };
 
   return (

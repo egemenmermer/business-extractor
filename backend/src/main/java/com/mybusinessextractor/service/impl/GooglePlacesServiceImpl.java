@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,6 +40,25 @@ public class GooglePlacesServiceImpl implements GooglePlacesService {
     @Value("${google.places.api.base-url}")
     private String baseUrl;
 
+    private static final Map<String, String> CATEGORY_TRANSLATIONS = Map.of(
+        "Diş Hekimliği", "dental clinic",
+        "Diş", "dental",
+        "Dişçi", "dentist",
+        "Hastane", "hospital",
+        "Restoran", "restaurant",
+        "Kafe", "cafe", 
+        "Berber", "barber",
+        "Kuaför", "hairdresser",
+        "Avukat", "lawyer"
+    );
+
+    private static final Map<String, String> LOCATION_TRANSLATIONS = Map.of(
+        "Türkiye", "Turkey",
+        "İstanbul", "Istanbul",
+        "Ankara", "Ankara",
+        "İzmir", "Izmir"
+    );
+
     /**
      * Searches for businesses using the Google Places Text Search API.
      *
@@ -48,10 +68,36 @@ public class GooglePlacesServiceImpl implements GooglePlacesService {
      */
     @Override
     public Flux<Business> searchBusinesses(String category, String location) {
-        String query = String.format("%s in %s", category, location);
+        // Translate Turkish categories and locations to English if translations exist
+        String searchCategory = CATEGORY_TRANSLATIONS.getOrDefault(category, category);
+        String searchLocation = LOCATION_TRANSLATIONS.getOrDefault(location, location);
+        
+        log.info("Searching for '{}' in '{}' (translated from: '{}' in '{}')", 
+                searchCategory, searchLocation, category, location);
+        
+        String query = String.format("%s in %s", searchCategory, searchLocation);
         String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-        String url = String.format("%s/textsearch/json?query=%s&key=%s", baseUrl, encodedQuery, apiKey);
+        
+        return fetchPlacesPage(encodedQuery, null);
+    }
 
+    /**
+     * Helper method to fetch places with pagination support
+     * 
+     * @param query The encoded query string
+     * @param pageToken The next page token, or null for the first page
+     * @return A Flux of Business objects
+     */
+    private Flux<Business> fetchPlacesPage(String query, String pageToken) {
+        String url;
+        if (pageToken != null) {
+            url = String.format("%s/textsearch/json?pagetoken=%s&key=%s", baseUrl, pageToken, apiKey);
+            log.info("Fetching next page of results using token");
+        } else {
+            url = String.format("%s/textsearch/json?query=%s&key=%s", baseUrl, query, apiKey);
+            log.info("Making initial API request: {}", url.replace(apiKey, "API_KEY_HIDDEN"));
+        }
+        
         return webClient.get()
                 .uri(url)
                 .retrieve()
@@ -61,22 +107,60 @@ public class GooglePlacesServiceImpl implements GooglePlacesService {
                         JsonNode root = objectMapper.readTree(response);
                         String status = root.path("status").asText();
                         
+                        if ("REQUEST_DENIED".equals(status)) {
+                            String errorMessage = root.path("error_message").asText("Unknown error");
+                            log.error("Google Places API request denied: {}", errorMessage);
+                            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, 
+                                    "Google Places API request denied: " + errorMessage);
+                        }
+                        
                         if (!"OK".equals(status) && !"ZERO_RESULTS".equals(status)) {
                             log.error("Google Places API error: {}", status);
-                            return Flux.error(new ResponseStatusException(HttpStatus.BAD_GATEWAY, 
-                                    "Google Places API error: " + status));
+                            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, 
+                                    "Google Places API error: " + status);
                         }
                         
                         JsonNode results = root.path("results");
-                        return Flux.fromIterable(results)
+                        if (results.size() == 0) {
+                            log.warn("No results found for this page");
+                            return Flux.empty();
+                        } else {
+                            log.info("Found {} results on this page", results.size());
+                        }
+                        
+                        // Check for next page token
+                        String nextPageToken = root.path("next_page_token").asText(null);
+                        
+                        Flux<Business> currentPageFlux = Flux.fromIterable(results)
                                 .map(this::mapToBasicBusiness);
+                        
+                        // If we have a next page token, recursively fetch the next page after a delay
+                        // (Google requires a short delay before using the next_page_token)
+                        if (nextPageToken != null && !nextPageToken.isEmpty()) {
+                            log.info("Next page token found, will fetch next page after delay");
+                            return currentPageFlux.concatWith(
+                                    Mono.delay(Duration.ofSeconds(2))
+                                    .flatMapMany(ignored -> fetchPlacesPage(query, nextPageToken))
+                            );
+                        }
+                        
+                        return currentPageFlux;
                     } catch (IOException e) {
                         log.error("Error parsing Google Places API response", e);
                         return Flux.error(e);
                     }
                 })
-                .retryWhen(Retry.backoff(3, Duration.ofSeconds(2))
-                        .maxBackoff(Duration.ofSeconds(10)));
+                .retryWhen(Retry.fixedDelay(3, Duration.ofSeconds(2))
+                        .filter(ex -> !(ex instanceof ResponseStatusException))
+                        .maxBackoff(Duration.ofSeconds(10))
+                        .doAfterRetry(retrySignal -> 
+                            log.warn("Retrying API request after failure. Attempt: {}/3", 
+                                    retrySignal.totalRetries() + 1))
+                        .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) -> {
+                            log.error("All retry attempts failed");
+                            return new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, 
+                                    "Failed to retrieve data after multiple attempts");
+                        }));
     }
 
     /**

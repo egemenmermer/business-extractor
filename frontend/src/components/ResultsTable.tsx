@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Business } from '../types';
 
@@ -7,16 +7,91 @@ const ResultsTable: React.FC = () => {
     businesses, 
     storedBusinesses, 
     isPolling, 
+    isLoading,
+    isLoadingMore,
     exportData, 
-    isViewingStoredData 
+    isViewingStoredData,
+    loadMoreBusinesses,
+    loadBusinessesByCategory,
+    loadBusinessesByCity,
+    loadBusinessesByEmailStatus,
+    loadBusinessesByCountry,
+    currentCategory,
+    currentCity,
+    isEmailFilterActive,
+    hasEmail,
+    isCountryFilterActive,
+    selectedCountry
   } = useAppContext();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [sortColumn, setSortColumn] = useState<keyof Business>('businessName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const tableRef = useRef<HTMLDivElement>(null);
 
   // Use appropriate data source based on view
   const dataSource = isViewingStoredData ? storedBusinesses : businesses;
+
+  // Handle loading more data when scrolling down
+  const handleLoadMore = useCallback(() => {
+    if (isViewingStoredData) {
+      if (currentCategory) {
+        loadBusinessesByCategory(currentCategory);
+      } else if (currentCity) {
+        loadBusinessesByCity(currentCity);
+      } else if (isEmailFilterActive && hasEmail !== null) {
+        loadBusinessesByEmailStatus(hasEmail);
+      } else if (isCountryFilterActive && selectedCountry) {
+        loadBusinessesByCountry(selectedCountry);
+      } else {
+        loadMoreBusinesses();
+      }
+    }
+  }, [
+    isViewingStoredData, 
+    currentCategory, 
+    currentCity, 
+    isEmailFilterActive, 
+    hasEmail, 
+    isCountryFilterActive, 
+    selectedCountry,
+    loadBusinessesByCategory, 
+    loadBusinessesByCity, 
+    loadBusinessesByEmailStatus, 
+    loadBusinessesByCountry, 
+    loadMoreBusinesses
+  ]);
+
+  // Effect for infinite scrolling
+  useEffect(() => {
+    if (!isViewingStoredData || isLoading || isLoadingMore) return;
+    
+    const handleScroll = () => {
+      if (!tableRef.current) return;
+      
+      const { scrollTop, scrollHeight, clientHeight } = tableRef.current;
+      // Load more when user scrolls to bottom (with a 100px threshold)
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        handleLoadMore();
+      }
+    };
+    
+    const tableElement = tableRef.current;
+    if (tableElement) {
+      tableElement.addEventListener('scroll', handleScroll);
+    }
+    
+    return () => {
+      if (tableElement) {
+        tableElement.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [
+    isViewingStoredData, 
+    isLoading, 
+    isLoadingMore, 
+    handleLoadMore
+  ]);
 
   // Filter businesses based on search term
   const filteredBusinesses = useMemo(() => {
@@ -80,6 +155,23 @@ const ResultsTable: React.FC = () => {
     );
   };
 
+  // Active filters summary
+  const activeFilters = () => {
+    const filters = [];
+    
+    if (currentCategory) filters.push(`Category: ${currentCategory}`);
+    if (currentCity) filters.push(`City: ${currentCity}`);
+    if (isEmailFilterActive) filters.push(`Email: ${hasEmail ? 'Has Email' : 'No Email'}`);
+    if (isCountryFilterActive && selectedCountry) filters.push(`Country: ${selectedCountry}`);
+    
+    return filters.length > 0 ? (
+      <div className="mt-2 text-left text-gray-400 mb-2">
+        <span className="mr-2">Active Filters:</span>
+        {filters.join(' • ')}
+      </div>
+    ) : null;
+  };
+
   return (
     <div className="bg-gray-800 rounded-lg shadow p-4 h-full">
       <div className="flex justify-between items-center mb-4">
@@ -89,7 +181,7 @@ const ResultsTable: React.FC = () => {
         <div className="flex space-x-2">
           <input
             type="text"
-            placeholder="Search..."
+            placeholder="Search in results..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="px-3 py-1 bg-gray-700 text-white rounded focus:outline-none"
@@ -110,8 +202,10 @@ const ResultsTable: React.FC = () => {
           </button>
         </div>
       </div>
+      
+      {isViewingStoredData && activeFilters()}
 
-      <div className="overflow-auto max-h-[calc(100vh-200px)]">
+      <div ref={tableRef} className="overflow-auto max-h-[calc(100vh-260px)]">
         {dataSource.length === 0 ? (
           <p className="text-gray-400 text-center py-8">
             {isViewingStoredData 
@@ -120,7 +214,7 @@ const ResultsTable: React.FC = () => {
           </p>
         ) : (
           <table className="min-w-full bg-gray-700 rounded-lg overflow-hidden">
-            <thead className="bg-gray-600">
+            <thead className="bg-gray-600 sticky top-0">
               <tr>
                 <th 
                   className="px-4 py-2 text-left text-white cursor-pointer"
@@ -154,6 +248,12 @@ const ResultsTable: React.FC = () => {
                 </th>
                 <th 
                   className="px-4 py-2 text-left text-white cursor-pointer"
+                  onClick={() => handleSort('country')}
+                >
+                  Country {renderSortIcon('country')}
+                </th>
+                <th 
+                  className="px-4 py-2 text-left text-white cursor-pointer"
                   onClick={() => handleSort('phone')}
                 >
                   Phone {renderSortIcon('phone')}
@@ -181,29 +281,55 @@ const ResultsTable: React.FC = () => {
                   <td className="px-4 py-2 text-white">{business.address}</td>
                   <td className="px-4 py-2 text-white">{business.city}</td>
                   <td className="px-4 py-2 text-white">{business.state}</td>
+                  <td className="px-4 py-2 text-white">{business.country}</td>
                   <td className="px-4 py-2 text-white">{business.phone}</td>
-                  <td className="px-4 py-2 text-white">{business.email}</td>
+                  <td className="px-4 py-2 text-white">{business.email || '—'}</td>
                   <td className="px-4 py-2 text-white truncate max-w-[200px]">
-                    {business.website}
+                    {business.website ? (
+                      <a 
+                        href={business.website.startsWith('http') ? business.website : `https://${business.website}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:underline"
+                      >
+                        {business.website}
+                      </a>
+                    ) : '—'}
                   </td>
                   <td className="px-4 py-2 text-white">
-                    <a
-                      href={business.mapsLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300"
-                    >
-                      Map
-                    </a>
+                    {business.mapsLink && (
+                      <a
+                        href={business.mapsLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300"
+                      >
+                        Map
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        
+        {isLoadingMore && (
+          <div className="text-center py-4">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+            <p className="mt-2 text-gray-400">Loading more businesses...</p>
+          </div>
+        )}
       </div>
-      <div className="mt-2 text-right text-gray-400">
-        {filteredBusinesses.length} of {dataSource.length} records
+      <div className="mt-4 flex justify-between text-gray-400">
+        <div>
+          {filteredBusinesses.length !== dataSource.length && 
+            `Showing ${filteredBusinesses.length} of ${dataSource.length} records (filtered)`
+          }
+        </div>
+        <div>
+          {dataSource.length > 0 ? `${dataSource.length} total records` : ''}
+        </div>
       </div>
     </div>
   );

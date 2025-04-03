@@ -3,8 +3,13 @@ package com.mybusinessextractor.service.impl;
 import com.mybusinessextractor.entity.BusinessEntity;
 import com.mybusinessextractor.model.Business;
 import com.mybusinessextractor.repository.BusinessRepository;
+import com.mybusinessextractor.service.BusinessPersistenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +22,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class BusinessPersistenceServiceImpl {
+public class BusinessPersistenceServiceImpl implements BusinessPersistenceService {
 
     private final BusinessRepository businessRepository;
 
@@ -171,6 +176,109 @@ public class BusinessPersistenceServiceImpl {
         return businessRepository.findByCity(city).stream()
                 .map(this::mapToModel)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Find businesses with pagination.
+     *
+     * @param page the page number (0-based)
+     * @param size the page size
+     * @return list of businesses for the requested page
+     */
+    @Transactional(readOnly = true)
+    public List<Business> findBusinessesWithPagination(int page, int size) {
+        // Create a PageRequest object with page number and size
+        org.springframework.data.domain.PageRequest pageRequest = 
+            org.springframework.data.domain.PageRequest.of(page, size);
+        
+        return businessRepository.findAll(pageRequest).getContent().stream()
+                .map(this::mapToModel)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Find businesses by category with pagination.
+     *
+     * @param category the category to search for
+     * @param page the page number (0-based)
+     * @param size the page size
+     * @return list of businesses for the requested page
+     */
+    @Transactional(readOnly = true)
+    public List<Business> findBusinessesByCategoryWithPagination(String category, int page, int size) {
+        org.springframework.data.domain.PageRequest pageRequest = 
+            org.springframework.data.domain.PageRequest.of(page, size);
+        
+        return businessRepository.findByCategory(category, pageRequest).getContent().stream()
+                .map(this::mapToModel)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Find businesses by city with pagination.
+     *
+     * @param city the city to search for
+     * @param page the page number (0-based)
+     * @param size the page size
+     * @return list of businesses for the requested page
+     */
+    @Transactional(readOnly = true)
+    public List<Business> findBusinessesByCityWithPagination(String city, int page, int size) {
+        org.springframework.data.domain.PageRequest pageRequest = 
+            org.springframework.data.domain.PageRequest.of(page, size);
+        
+        return businessRepository.findByCity(city, pageRequest).getContent().stream()
+                .map(this::mapToModel)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Find businesses with email.
+     *
+     * @param pageable the pagination information
+     * @return page of businesses with email addresses
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Business> findBusinessesWithEmail(Pageable pageable) {
+        Page<BusinessEntity> entityPage = businessRepository.findByEmailIsNotNull(pageable);
+        List<Business> businesses = entityPage.getContent().stream()
+                .map(this::mapToModel)
+                .collect(Collectors.toList());
+        return new PageImpl<>(businesses, pageable, entityPage.getTotalElements());
+    }
+
+    /**
+     * Find businesses without email.
+     *
+     * @param pageable the pagination information
+     * @return page of businesses without email addresses
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Business> findBusinessesWithoutEmail(Pageable pageable) {
+        Page<BusinessEntity> entityPage = businessRepository.findByEmailIsNull(pageable);
+        List<Business> businesses = entityPage.getContent().stream()
+                .map(this::mapToModel)
+                .collect(Collectors.toList());
+        return new PageImpl<>(businesses, pageable, entityPage.getTotalElements());
+    }
+
+    /**
+     * Find businesses by country.
+     *
+     * @param country the country to search for
+     * @param pageable the pagination information
+     * @return page of businesses in the given country
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Business> findBusinessesByCountry(String country, Pageable pageable) {
+        Page<BusinessEntity> entityPage = businessRepository.findByCountry(country, pageable);
+        List<Business> businesses = entityPage.getContent().stream()
+                .map(this::mapToModel)
+                .collect(Collectors.toList());
+        return new PageImpl<>(businesses, pageable, entityPage.getTotalElements());
     }
 
     /**

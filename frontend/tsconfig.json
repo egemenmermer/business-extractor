@@ -26,8 +26,10 @@
       "../types/*": ["types/*"],
       "../context/*": ["context/*"],
       "../components/*": ["components/*"],
-      "../services/*": ["services/*"]
-    }
+      "../services/*": ["services/*"],
+      "react-router-dom": ["../node_modules/react-router-dom"]
+    },
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "include": [
     "src"
