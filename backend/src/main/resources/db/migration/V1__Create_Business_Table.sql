@@ -1,0 +1,20 @@
+CREATE TABLE businesses (
+    google_place_id VARCHAR(255) PRIMARY KEY,
+    business_name VARCHAR(255) NOT NULL,
+    real_category VARCHAR(255),
+    category VARCHAR(255),
+    address VARCHAR(500),
+    city VARCHAR(255),
+    state VARCHAR(255),
+    postal_code VARCHAR(50),
+    country VARCHAR(255),
+    phone VARCHAR(50),
+    email VARCHAR(255),
+    website VARCHAR(500),
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    maps_link VARCHAR(500),
+    details_link VARCHAR(500),
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP
+); 
