@@ -1,8 +1,7 @@
-# MyBusiness Extractor
+# Business Extractor 
 
 A full-stack web application that extracts business data from Google Places API, Built with Spring Boot (backend) and React (frontend).
 
-![MyBusiness Extractor Screenshot](screenshot.png)
 
 ## Features
 
