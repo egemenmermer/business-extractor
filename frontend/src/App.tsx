@@ -1,31 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useState, useRef } from 'react';
 import { AppProvider } from './context/AppContext';
 import CategoryPanel from './components/CategoryPanel';
 import LocationPanel from './components/LocationPanel';
 import TaskQueuePanel from './components/TaskQueuePanel';
 import ResultsTable from './components/ResultsTable';
-import LandingPage from './pages/LandingPage';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import EmailVerify from './pages/EmailVerify';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
 import './App.css';
 import { useAppContext } from './context/AppContext';
-
-// Auth check component for protected routes
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const token = localStorage.getItem('token');
-  const location = useLocation();
-  
-  if (!token) {
-    // Redirect to login if not authenticated
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-  
-  return <>{children}</>;
-};
 
 // Main App Content Component (separate to use context)
 const AppContent: React.FC = () => {
@@ -77,23 +57,9 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen p-4 bg-gray-900 text-white">
-      <header className="mb-4 flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold">MyBusiness Extractor</h1>
-          <p className="text-gray-400">Extract business data from Google Places API</p>
-        </div>
-        <div>
-          <button 
-            className="px-4 py-2 bg-red-600 text-white font-medium rounded hover:bg-red-700"
-            onClick={() => {
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
-              window.location.href = '/login';
-            }}
-          >
-            Logout
-          </button>
-        </div>
+      <header className="mb-4">
+        <h1 className="text-2xl font-bold">MyBusiness Extractor</h1>
+        <p className="text-gray-400">Extract business data from Google Places API</p>
       </header>
 
       <div className="mb-4">
@@ -331,47 +297,12 @@ const AppContent: React.FC = () => {
   );
 };
 
-// App Wrapper with Provider and Routes
+// App Wrapper with Provider
 const App: React.FC = () => {
-  // Check for authentication token on component mount 
-  // and set up axios interceptor for token handling
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    
-    if (token) {
-      // Set default Authorization header for all axios requests
-      // This would normally be done in an axios interceptor
-      // But for simplicity, we're just showing the concept here
-    }
-  }, []);
-  
   return (
-    <Router>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/email-verify" element={<EmailVerify />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        
-        {/* Protected Routes */}
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <AppProvider>
-                <AppContent />
-              </AppProvider>
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* Catch all - redirect to landing */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
   );
 };
 

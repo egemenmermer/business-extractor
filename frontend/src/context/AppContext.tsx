@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Business } from '../types';
-import { businessAPI } from '../services/api';
+import { getStoredBusinesses, getBusinessesByCategory, getBusinessesByCity, getBusinessesByEmailStatus, getBusinessesByCountry } from '../services/api';
+import { getTasks, getResults, exportResults as apiExportResults, searchBusinesses as apiSearchBusinesses } from '../services/api';
+import { PaginatedResponse } from '../services/api';
 
 // Interface definitions for context types
 interface AppContextType {
@@ -67,19 +69,6 @@ interface TaskStatus {
   message?: string;
 }
 
-interface PaginatedResponse<T> {
-  content: T[];
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-  };
-  last: boolean;
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
-}
-
 export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [categories, setCategories] = useState<string[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
@@ -110,12 +99,10 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     if (isPolling) {
       interval = setInterval(async () => {
         try {
-          const taskResponse = await businessAPI.getTasks();
-          const taskResults = taskResponse.data;
+          const taskResults = await getTasks();
           setTasks(taskResults);
           
-          const resultsResponse = await businessAPI.getResults();
-          const resultsData = resultsResponse.data;
+          const resultsData = await getResults();
           setBusinesses(resultsData.businesses);
           
           // Check if all tasks are completed or failed
@@ -192,16 +179,15 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         locations: selectedLocations,
       };
       
-      // Use the new API service
-      await businessAPI.search(request);
+      await apiSearchBusinesses(request);
       setIsPolling(true);
       
       // Initial fetch of tasks and results
-      const taskResponse = await businessAPI.getTasks();
-      setTasks(taskResponse.data);
+      const taskResults = await getTasks();
+      setTasks(taskResults);
       
-      const resultsResponse = await businessAPI.getResults();
-      setBusinesses(resultsResponse.data.businesses);
+      const resultsData = await getResults();
+      setBusinesses(resultsData.businesses);
     } catch (error) {
       console.error('Error starting search:', error);
     } finally {
@@ -217,8 +203,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
     try {
       setIsLoading(true);
-      const response = await businessAPI.exportResults(format);
-      const blob = response.data;
+      const blob = await apiExportResults(format);
       
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -255,18 +240,18 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       // Reset pagination if loading first page
       if (page === 0) {
         setCurrentPage(0);
-        const response = await businessAPI.getStoredBusinesses(0, PAGE_SIZE);
-        setStoredBusinesses(response.data);
-        setHasMore(response.data.length === PAGE_SIZE);
+        const data = await getStoredBusinesses(0, PAGE_SIZE);
+        setStoredBusinesses(data);
+        setHasMore(data.length === PAGE_SIZE);
       } else {
-        const response = await businessAPI.getStoredBusinesses(page, PAGE_SIZE);
+        const data = await getStoredBusinesses(page, PAGE_SIZE);
         if (page === 0) {
-          setStoredBusinesses(response.data);
+          setStoredBusinesses(data);
         } else {
-          setStoredBusinesses(prev => [...prev, ...response.data]);
+          setStoredBusinesses(prev => [...prev, ...data]);
         }
         setCurrentPage(page);
-        setHasMore(response.data.length === PAGE_SIZE);
+        setHasMore(data.length === PAGE_SIZE);
       }
       
       setIsViewingStoredData(true);
@@ -284,8 +269,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     setIsLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
-      const response = await businessAPI.getStoredBusinesses(nextPage, PAGE_SIZE);
-      const data = response.data;
+      const data = await getStoredBusinesses(nextPage, PAGE_SIZE);
       
       if (data.length > 0) {
         setStoredBusinesses([...storedBusinesses, ...data]);
@@ -306,15 +290,8 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       setCurrentPage(0);
       setCurrentCategory(category);
       setCurrentCity(null);
-      
-      // Reset other filters
-      setIsEmailFilterActive(false);
-      setHasEmail(null);
-      setIsCountryFilterActive(false);
-      setSelectedCountry(null);
-      
-      const response = await businessAPI.getBusinessesByCategory(category, 0, PAGE_SIZE);
-      setStoredBusinesses(response.data);
+      const data = await getBusinessesByCategory(category, 0, PAGE_SIZE);
+      setStoredBusinesses(data);
       setIsViewingStoredData(true);
     } catch (error) {
       console.error(`Error loading businesses by category ${category}:`, error);
@@ -330,8 +307,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     setIsLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
-      const response = await businessAPI.getBusinessesByCategory(category, nextPage, PAGE_SIZE);
-      const data = response.data;
+      const data = await getBusinessesByCategory(category, nextPage, PAGE_SIZE);
       
       if (data.length > 0) {
         setStoredBusinesses([...storedBusinesses, ...data]);
@@ -353,15 +329,8 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       setCurrentPage(0);
       setCurrentCity(city);
       setCurrentCategory(null);
-      
-      // Reset other filters
-      setIsEmailFilterActive(false);
-      setHasEmail(null);
-      setIsCountryFilterActive(false);
-      setSelectedCountry(null);
-      
-      const response = await businessAPI.getBusinessesByCity(city, 0, PAGE_SIZE);
-      setStoredBusinesses(response.data);
+      const data = await getBusinessesByCity(city, 0, PAGE_SIZE);
+      setStoredBusinesses(data);
       setIsViewingStoredData(true);
     } catch (error) {
       console.error(`Error loading businesses by city ${city}:`, error);
@@ -377,8 +346,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     setIsLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
-      const response = await businessAPI.getBusinessesByCity(city, nextPage, PAGE_SIZE);
-      const data = response.data;
+      const data = await getBusinessesByCity(city, nextPage, PAGE_SIZE);
       
       if (data.length > 0) {
         setStoredBusinesses([...storedBusinesses, ...data]);
@@ -407,17 +375,16 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       setSelectedCountry(null);
       
       try {
-        const response = await businessAPI.getBusinessesByEmailStatus(hasEmail, page, PAGE_SIZE);
-        const data = response.data;
+        const response = await getBusinessesByEmailStatus(hasEmail, page, PAGE_SIZE);
         
         if (page === 0) {
-          setStoredBusinesses(data);
+          setStoredBusinesses(response.content);
         } else {
-          setStoredBusinesses(prev => [...prev, ...data]);
+          setStoredBusinesses(prev => [...prev, ...response.content]);
         }
         
         setCurrentPage(page);
-        setHasMore(data.length === PAGE_SIZE);
+        setHasMore(!response.last);
       } catch (error) {
         console.error('Error loading businesses by email status:', error);
       }
@@ -441,17 +408,16 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       setHasEmail(null);
       
       try {
-        const response = await businessAPI.getBusinessesByCountry(country, page, PAGE_SIZE);
-        const data = response.data;
+        const response = await getBusinessesByCountry(country, page, PAGE_SIZE);
         
         if (page === 0) {
-          setStoredBusinesses(data);
+          setStoredBusinesses(response.content);
         } else {
-          setStoredBusinesses(prev => [...prev, ...data]);
+          setStoredBusinesses(prev => [...prev, ...response.content]);
         }
         
         setCurrentPage(page);
-        setHasMore(data.length === PAGE_SIZE);
+        setHasMore(!response.last);
       } catch (error) {
         console.error('Error loading businesses by country:', error);
       }

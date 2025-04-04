@@ -11,32 +11,6 @@ const api = axios.create({
   },
 });
 
-// Add interceptor to add auth token to requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Add interceptor to handle token expiration
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      // Token expired or invalid, redirect to login
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-
 // Add PaginatedResponse type
 export interface PaginatedResponse {
   content: Business[];
@@ -49,66 +23,116 @@ export interface PaginatedResponse {
   last: boolean;
 }
 
-// Auth API service
-export const authAPI = {
-  register: async (data: any) => {
-    return api.post('/auth/register', data);
-  },
-  
-  login: async (data: any) => {
-    return api.post('/auth/login', data);
-  },
-  
-  verifyEmail: async (token: string) => {
-    return api.get(`/auth/verify-email?token=${token}`);
-  },
-  
-  forgotPassword: async (email: string) => {
-    return api.post('/auth/forgot-password', { email });
-  },
-  
-  resetPassword: async (token: string, newPassword: string) => {
-    return api.post('/auth/reset-password', { token, newPassword });
-  },
+export const searchBusinesses = async (request: SearchRequest): Promise<string> => {
+  const response = await api.post('/search', request);
+  return response.data;
 };
 
-// Business API service
-export const businessAPI = {
-  search: async (data: any) => {
-    return api.post('/search', data);
-  },
-  
-  getTasks: async () => {
-    return api.get('/tasks');
-  },
-  
-  getResults: async () => {
-    return api.get('/results');
-  },
-  
-  exportResults: async (format: string) => {
-    return api.post('/export', { format }, { responseType: 'blob' });
-  },
-  
-  getStoredBusinesses: async (page: number = 0, size: number = 50) => {
-    return api.get(`/businesses?page=${page}&size=${size}`);
-  },
-  
-  getBusinessesByCategory: async (category: string, page: number = 0, size: number = 50) => {
-    return api.get(`/businesses/category/${encodeURIComponent(category)}?page=${page}&size=${size}`);
-  },
-  
-  getBusinessesByCity: async (city: string, page: number = 0, size: number = 50) => {
-    return api.get(`/businesses/city/${encodeURIComponent(city)}?page=${page}&size=${size}`);
-  },
-  
-  getBusinessesByEmailStatus: async (hasEmail: boolean, page: number = 0, size: number = 50) => {
-    return api.get(`/businesses/email-status?hasEmail=${hasEmail}&page=${page}&size=${size}`);
-  },
-  
-  getBusinessesByCountry: async (country: string, page: number = 0, size: number = 50) => {
-    return api.get(`/businesses/country/${encodeURIComponent(country)}?page=${page}&size=${size}`);
-  },
+export const getTasks = async (): Promise<TaskStatus[]> => {
+  const response = await api.get('/tasks');
+  return response.data;
+};
+
+export const getResults = async (): Promise<{
+  businesses: Business[];
+  total: number;
+  status: string;
+}> => {
+  const response = await api.get('/results');
+  return response.data;
+};
+
+export const exportResults = async (format: string): Promise<Blob> => {
+  const response = await api.post('/export', { format }, {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+/**
+ * Retrieves all businesses stored in the database
+ */
+export const getStoredBusinesses = async (page: number = 0, size: number = 50): Promise<Business[]> => {
+  const response = await api.get('/businesses', {
+    params: { page, size }
+  });
+  return response.data;
+};
+
+/**
+ * Retrieves businesses from the database by category
+ */
+export const getBusinessesByCategory = async (category: string, page: number = 0, size: number = 50): Promise<Business[]> => {
+  const response = await api.get(`/businesses/category/${encodeURIComponent(category)}`, {
+    params: { page, size }
+  });
+  return response.data;
+};
+
+/**
+ * Retrieves businesses from the database by city
+ */
+export const getBusinessesByCity = async (city: string, page: number = 0, size: number = 50): Promise<Business[]> => {
+  const response = await api.get(`/businesses/city/${encodeURIComponent(city)}`, {
+    params: { page, size }
+  });
+  return response.data;
+};
+
+// Function to get businesses by email status
+export const getBusinessesByEmailStatus = async (
+  hasEmail: boolean,
+  page: number = 0,
+  size: number = 50
+): Promise<PaginatedResponse> => {
+  try {
+    const response = await fetch(
+      `${API_URL}/businesses/filter/email?hasEmail=${hasEmail}&page=${page}&size=${size}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching businesses by email status:', error);
+    throw error;
+  }
+};
+
+// Function to get businesses by country
+export const getBusinessesByCountry = async (
+  country: string,
+  page: number = 0,
+  size: number = 50
+): Promise<PaginatedResponse> => {
+  try {
+    const response = await fetch(
+      `${API_URL}/businesses/filter/country?country=${encodeURIComponent(country)}&page=${page}&size=${size}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching businesses by country:', error);
+    throw error;
+  }
 };
 
 export default api; 

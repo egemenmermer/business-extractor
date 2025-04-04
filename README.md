@@ -24,77 +24,74 @@ A full-stack web application that extracts business data from Google Places API,
 
 ### Backend
 - Java 17
-- Spring Boot
-- Spring Security with JWT
-- PostgreSQL
-- Hibernate/JPA
-- Flyway for database migrations
-- WebClient for API calls
+- Spring Boot 3.4.4
+- WebFlux for reactive API calls
+- Apache POI for Excel export
 
 ### Frontend
-- React
-- TypeScript
-- React Router
-- Axios
-- TailwindCSS
+- React 19 with TypeScript
+- Tailwind CSS for styling
+- Axios for API communication
+- Context API for state management
 
-## Environment Configuration
-
-The application uses environment variables for configuration to keep sensitive information secure. 
-
-1. Create a `.env` file in the backend directory using the provided `.env.example` as a template.
-2. Update the values in the `.env` file with your specific configuration.
-3. Make sure not to commit the `.env` file to version control (it's already included in `.gitignore`).
-
-Key environment variables that need to be configured:
-
-- `POSTGRES_PASSWORD`: Your database password
-- `GOOGLE_PLACES_API_KEY`: Your Google Places API key
-- `JWT_SECRET`: A secure secret for JWT token generation
-- `MAIL_USERNAME`, `MAIL_PASSWORD`: Your email credentials for sending verification emails
-
-## Installation & Setup
+## Setup & Installation
 
 ### Prerequisites
-- Java 17
-- Node.js 14+ and npm
-- PostgreSQL
+- Java 17+
+- Node.js 16+
+- npm 8+
+- Google Places API key
 
 ### Backend Setup
-1. Navigate to the `backend` directory
-2. Create a `.env` file from the `.env.example` template
-3. Run `./mvnw clean install` to build the project
-4. Run `./mvnw spring-boot:run` to start the backend server
+1. Navigate to the backend directory:
+   ```
+   cd backend
+   ```
+
+2. Add your Google Places API key to `src/main/resources/application.properties` or as an environment variable:
+   ```
+   GOOGLE_PLACES_API_KEY=your_api_key_here
+   ```
+
+3. Build and run the Spring Boot application:
+   ```
+   ./mvnw spring-boot:run
+   ```
+   The backend will start on http://localhost:8080
 
 ### Frontend Setup
-1. Navigate to the `frontend` directory
-2. Run `npm install` to install dependencies
-3. Run `npm start` to start the frontend development server
+1. Navigate to the frontend directory:
+   ```
+   cd frontend
+   ```
 
-### Database Setup
-1. Install PostgreSQL and create a database named `business_extractor`
-2. The application uses Flyway migrations to set up the database schema automatically
+2. Install dependencies:
+   ```
+   npm install
+   ```
 
-## Running the Application
+3. Start the development server:
+   ```
+   npm start
+   ```
+   The frontend will start on http://localhost:3000
 
-Use the provided `start.sh` script to run both the backend and frontend:
+## Usage
 
-```bash
-chmod +x start.sh
-./start.sh
-```
+1. Add categories (e.g., "Restaurant", "Hotel", "Lawyer") to the Categories panel
+2. Add locations (e.g., "New York", "Los Angeles", "Chicago") to the Locations panel
+3. Select the categories and locations you want to search for
+4. Click "Get Data" to start the search
+5. Monitor progress in the Tasks panel
+6. View and filter results in the Results table
+7. Export results as CSV or Excel
 
-The application will be available at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8080
+## API Endpoints
 
-## License
-
-[MIT License](LICENSE)
-
-## Contributors
-
-- [Your Name](https://github.com/yourusername)
+- `POST /api/search` - Start a new search with categories and locations
+- `GET /api/tasks` - Get the status of all tasks
+- `GET /api/results` - Get the current search results
+- `POST /api/export` - Export results as CSV or Excel
 
 ## Project Structure
 
@@ -114,19 +111,6 @@ The application will be available at:
     - services/ - API communication services
     - types/ - TypeScript interfaces
 
-## Usage
+## License
 
-1. Add categories (e.g., "Restaurant", "Hotel", "Lawyer") to the Categories panel
-2. Add locations (e.g., "New York", "Los Angeles", "Chicago") to the Locations panel
-3. Select the categories and locations you want to search for
-4. Click "Get Data" to start the search
-5. Monitor progress in the Tasks panel
-6. View and filter results in the Results table
-7. Export results as CSV or Excel
-
-## API Endpoints
-
-- `POST /api/search` - Start a new search with categories and locations
-- `GET /api/tasks` - Get the status of all tasks
-- `GET /api/results` - Get the current search results
-- `POST /api/export` - Export results as CSV or Excel
+MIT
