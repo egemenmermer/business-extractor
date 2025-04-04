@@ -19,4 +19,10 @@ public class SearchRequest {
     
     @NotEmpty(message = "At least one location is required")
     private List<String> locations;
+    
+    /**
+     * Flag to indicate whether search results should be saved to the database.
+     * Defaults to true if not specified.
+     */
+    private Boolean saveToDatabase = true;
 } 

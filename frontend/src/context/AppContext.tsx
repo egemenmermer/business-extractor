@@ -57,6 +57,7 @@ export const useAppContext = () => {
 interface SearchRequest {
   categories: string[];
   locations: string[];
+  saveToDatabase: boolean;
 }
 
 interface TaskStatus {
@@ -91,6 +92,8 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  // Always save to database without UI option
+  const saveToDatabase = true;
 
   // Poll for tasks status when searching
   useEffect(() => {
@@ -177,6 +180,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       const request: SearchRequest = {
         categories: selectedCategories,
         locations: selectedLocations,
+        saveToDatabase: true // Always true
       };
       
       await apiSearchBusinesses(request);
@@ -472,7 +476,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     isEmailFilterActive,
     hasEmail,
     isCountryFilterActive,
-    selectedCountry,
+    selectedCountry
   };
 
   return (

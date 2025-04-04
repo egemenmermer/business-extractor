@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Business, SearchRequest, TaskStatus } from '../types/index';
+import type { Business, TaskStatus } from '../types/index';
 
 // Use environment variable if available, otherwise fallback to default URL
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
@@ -14,13 +14,15 @@ const api = axios.create({
 // Add PaginatedResponse type
 export interface PaginatedResponse {
   content: Business[];
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-  };
   totalElements: number;
   totalPages: number;
   last: boolean;
+}
+
+export interface SearchRequest {
+  categories: string[];
+  locations: string[];
+  saveToDatabase?: boolean;
 }
 
 export const searchBusinesses = async (request: SearchRequest): Promise<string> => {

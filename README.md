@@ -1,6 +1,6 @@
 # MyBusiness Extractor
 
-A full-stack web application that extracts business data from Google Places API,  Built with Spring Boot (backend) and React (frontend).
+A full-stack web application that extracts business data from Google Places API, Built with Spring Boot (backend) and React (frontend).
 
 ![MyBusiness Extractor Screenshot](screenshot.png)
 
@@ -17,8 +17,9 @@ A full-stack web application that extracts business data from Google Places API,
   - Geo-coordinates
   - Google Maps links
 - Real-time task progress tracking
-- Export results as CSV or Excel
+- Export results as CSV or XLSX
 - Responsive UI with dark theme
+- Country expansion feature that automatically searches all cities of a country
 
 ## Tech Stack
 
@@ -48,7 +49,11 @@ A full-stack web application that extracts business data from Google Places API,
    cd backend
    ```
 
-2. Add your Google Places API key to `src/main/resources/application.properties` or as an environment variable:
+2. Copy the `.env.example` file to `.env` and add your Google Places API key:
+   ```
+   cp .env.example .env
+   ```
+   Then edit the `.env` file and set:
    ```
    GOOGLE_PLACES_API_KEY=your_api_key_here
    ```
@@ -84,14 +89,17 @@ A full-stack web application that extracts business data from Google Places API,
 4. Click "Get Data" to start the search
 5. Monitor progress in the Tasks panel
 6. View and filter results in the Results table
-7. Export results as CSV or Excel
+7. Export results as CSV or XLSX
+
+### Country Expansion Feature
+When you enter a country name (like "Turkey") as a location, the search will automatically be expanded to search in all major cities of that country. This helps overcome the 60-result limit of the Google Places API for broad location searches.
 
 ## API Endpoints
 
 - `POST /api/search` - Start a new search with categories and locations
 - `GET /api/tasks` - Get the status of all tasks
 - `GET /api/results` - Get the current search results
-- `POST /api/export` - Export results as CSV or Excel
+- `POST /api/export` - Export results as CSV or XLSX
 
 ## Project Structure
 

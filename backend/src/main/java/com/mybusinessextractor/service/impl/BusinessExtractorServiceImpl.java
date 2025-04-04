@@ -6,6 +6,7 @@ import com.mybusinessextractor.dto.TaskStatus;
 import com.mybusinessextractor.model.Business;
 import com.mybusinessextractor.service.BusinessExtractorService;
 import com.mybusinessextractor.service.GooglePlacesService;
+import com.mybusinessextractor.util.CountryCitiesUtil;
 import com.mybusinessextractor.util.ExportUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of the BusinessExtractorService for extracting business data.
@@ -32,6 +34,7 @@ public class BusinessExtractorServiceImpl implements BusinessExtractorService {
     private final GooglePlacesService googlePlacesService;
     private final ExportUtil exportUtil;
     private final BusinessPersistenceServiceImpl businessPersistenceService;
+    private final CountryCitiesUtil countryCitiesUtil;
     
     // In-memory storage for results and tasks
     private final List<Business> businessResults = new CopyOnWriteArrayList<>();
@@ -40,6 +43,7 @@ public class BusinessExtractorServiceImpl implements BusinessExtractorService {
     
     /**
      * Initiates a search for businesses based on provided categories and locations.
+     * If a location is a country, it will be broken down into city-level searches.
      * 
      * @param request The search request containing categories and locations
      * @return A unique task ID for tracking
@@ -50,10 +54,15 @@ public class BusinessExtractorServiceImpl implements BusinessExtractorService {
         businessResults.clear();
         taskStatuses.clear();
         
-        // Create a task for each category-location combination
+        // Get categories and locations from the request
         List<String> categories = request.getCategories();
-        List<String> locations = request.getLocations();
+        List<String> locations = expandCountryLocations(request.getLocations());
+        Boolean saveToDatabase = request.getSaveToDatabase() != null ? request.getSaveToDatabase() : true;
         
+        log.info("Starting search with {} categories and {} locations (expanded from {})", 
+                categories.size(), locations.size(), request.getLocations().size());
+        
+        // Create a task for each category-location combination
         categories.forEach(category -> 
             locations.forEach(location -> {
                 String taskId = String.valueOf(taskIdCounter.getAndIncrement());
@@ -69,11 +78,35 @@ public class BusinessExtractorServiceImpl implements BusinessExtractorService {
                 taskStatuses.put(taskId, taskStatus);
                 
                 // Process the task asynchronously
-                processTask(taskId, category, location);
+                processTask(taskId, category, location, saveToDatabase);
             })
         );
         
         return UUID.randomUUID().toString();
+    }
+    
+    /**
+     * Expands country locations to city-level locations.
+     * If a location is a recognized country, it will be replaced with its cities.
+     * Otherwise, the original location is kept.
+     *
+     * @param originalLocations The original list of locations
+     * @return The expanded list of locations
+     */
+    private List<String> expandCountryLocations(List<String> originalLocations) {
+        List<String> expandedLocations = new ArrayList<>();
+        
+        for (String location : originalLocations) {
+            if (countryCitiesUtil.isCountry(location)) {
+                log.info("Expanding country location: {} into individual cities", location);
+                List<String> cities = countryCitiesUtil.getCitiesForCountry(location);
+                expandedLocations.addAll(cities);
+            } else {
+                expandedLocations.add(location);
+            }
+        }
+        
+        return expandedLocations;
     }
     
     /**
@@ -109,7 +142,7 @@ public class BusinessExtractorServiceImpl implements BusinessExtractorService {
     /**
      * Exports the current results to a file.
      * 
-     * @param format The export format (csv or excel)
+     * @param format The export format (csv or xlsx)
      * @return The path to the exported file
      */
     @Override
@@ -122,11 +155,11 @@ public class BusinessExtractorServiceImpl implements BusinessExtractorService {
         
         if ("csv".equalsIgnoreCase(format)) {
             return exportUtil.exportToCsv(results);
-        } else if ("excel".equalsIgnoreCase(format)) {
+        } else if ("xlsx".equalsIgnoreCase(format) || "excel".equalsIgnoreCase(format)) {
             return exportUtil.exportToExcel(results);
         } else {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                    "Unsupported export format. Use 'csv' or 'excel'");
+                    "Unsupported export format. Use 'csv' or 'xlsx'");
         }
     }
     
@@ -136,8 +169,9 @@ public class BusinessExtractorServiceImpl implements BusinessExtractorService {
      * @param taskId The task ID
      * @param category The business category
      * @param location The location to search
+     * @param saveToDatabase Whether to save results to database
      */
-    private void processTask(String taskId, String category, String location) {
+    private void processTask(String taskId, String category, String location, boolean saveToDatabase) {
         // Update task status to PROCESSING
         TaskStatus taskStatus = taskStatuses.get(taskId);
         taskStatus.setStatus("PROCESSING");
@@ -194,11 +228,13 @@ public class BusinessExtractorServiceImpl implements BusinessExtractorService {
                 // Add to results
                 businessResults.add(business);
                 
-                // Save to database
-                try {
-                    businessPersistenceService.saveBusiness(business);
-                } catch (Exception e) {
-                    log.error("Error saving business to database: {}", business.getId(), e);
+                // Save to database only if saveToDatabase flag is true
+                if (saveToDatabase) {
+                    try {
+                        businessPersistenceService.saveBusiness(business);
+                    } catch (Exception e) {
+                        log.error("Error saving business to database: {}", business.getId(), e);
+                    }
                 }
             })
             .doOnComplete(() -> {

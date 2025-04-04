@@ -20,6 +20,7 @@ export interface Business {
 export interface SearchRequest {
   categories: string[];
   locations: string[];
+  saveToDatabase?: boolean;
 }
 
 export interface TaskStatus {

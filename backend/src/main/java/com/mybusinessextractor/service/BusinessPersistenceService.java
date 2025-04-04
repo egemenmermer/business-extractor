@@ -1,10 +1,6 @@
 package com.mybusinessextractor.service;
 
-import com.mybusinessextractor.entity.BusinessEntity;
 import com.mybusinessextractor.model.Business;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-
 import java.util.List;
 
 /**
@@ -13,23 +9,23 @@ import java.util.List;
 public interface BusinessPersistenceService {
 
     /**
-     * Save a business to the database.
+     * Save a business to the storage.
      *
      * @param business the business model to save
-     * @return the saved business entity
+     * @return the saved business
      */
-    BusinessEntity saveBusiness(Business business);
+    Business saveBusiness(Business business);
 
     /**
-     * Save a list of businesses to the database.
+     * Save a list of businesses to the storage.
      *
      * @param businesses the list of business models to save
-     * @return the saved business entities
+     * @return the saved business list
      */
-    List<BusinessEntity> saveBusinesses(List<Business> businesses);
+    List<Business> saveBusinesses(List<Business> businesses);
 
     /**
-     * Find all businesses in the database.
+     * Find all businesses in the storage.
      *
      * @return list of all businesses
      */
@@ -83,25 +79,61 @@ public interface BusinessPersistenceService {
     /**
      * Find businesses with email.
      *
-     * @param pageable the pagination information
-     * @return page of businesses with email addresses
+     * @param page the page number (0-based)
+     * @param size the page size
+     * @return paginated list of businesses with email addresses and metadata
      */
-    Page<Business> findBusinessesWithEmail(Pageable pageable);
+    PaginatedBusinessList findBusinessesWithEmail(int page, int size);
 
     /**
      * Find businesses without email.
      *
-     * @param pageable the pagination information
-     * @return page of businesses without email addresses
+     * @param page the page number (0-based)
+     * @param size the page size
+     * @return paginated list of businesses without email addresses and metadata
      */
-    Page<Business> findBusinessesWithoutEmail(Pageable pageable);
+    PaginatedBusinessList findBusinessesWithoutEmail(int page, int size);
 
     /**
      * Find businesses by country.
      *
      * @param country the country to search for
-     * @param pageable the pagination information
-     * @return page of businesses in the given country
+     * @param page the page number (0-based)
+     * @param size the page size
+     * @return paginated list of businesses in the given country and metadata
      */
-    Page<Business> findBusinessesByCountry(String country, Pageable pageable);
+    PaginatedBusinessList findBusinessesByCountry(String country, int page, int size);
+    
+    /**
+     * Represents a paginated list of businesses with metadata.
+     */
+    class PaginatedBusinessList {
+        private List<Business> content;
+        private int totalElements;
+        private int totalPages;
+        private boolean last;
+        
+        public PaginatedBusinessList(List<Business> content, int totalElements, int pageSize, int currentPage) {
+            this.content = content;
+            this.totalElements = totalElements;
+            this.totalPages = (int) Math.ceil((double) totalElements / pageSize);
+            this.last = currentPage >= this.totalPages - 1;
+        }
+        
+        public List<Business> getContent() {
+            return content;
+        }
+        
+        public int getTotalElements() {
+            return totalElements;
+        }
+        
+        public int getTotalPages() {
+            return totalPages;
+        }
+        
+        public boolean isLast() {
+            return last;
+        }
+    }
 } 

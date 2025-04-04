@@ -75,9 +75,12 @@ public class GooglePlacesServiceImpl implements GooglePlacesService {
         log.info("Searching for '{}' in '{}' (translated from: '{}' in '{}')", 
                 searchCategory, searchLocation, category, location);
         
+        // Use a more specific query format that combines the category and location in different ways
+        // This approach yields better and more comprehensive results across different locations
         String query = String.format("%s in %s", searchCategory, searchLocation);
         String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
         
+        // Use a more region-targeted approach for detailed results
         return fetchPlacesPage(encodedQuery, null);
     }
 

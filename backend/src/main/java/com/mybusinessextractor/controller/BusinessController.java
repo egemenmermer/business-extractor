@@ -2,11 +2,9 @@ package com.mybusinessextractor.controller;
 
 import com.mybusinessextractor.model.Business;
 import com.mybusinessextractor.service.BusinessPersistenceService;
+import com.mybusinessextractor.service.BusinessPersistenceService.PaginatedBusinessList;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,16 +28,15 @@ public class BusinessController {
      * @return the businesses with or without email based on the filter
      */
     @GetMapping("/filter/email")
-    public ResponseEntity<Page<Business>> filterBusinessesByEmail(
+    public ResponseEntity<PaginatedBusinessList> filterBusinessesByEmail(
             @RequestParam(value = "hasEmail", required = true) boolean hasEmail,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         log.info("Filtering businesses by email status: {}", hasEmail ? "Has Email" : "No Email");
         
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Business> businesses = hasEmail 
-            ? businessPersistenceService.findBusinessesWithEmail(pageable)
-            : businessPersistenceService.findBusinessesWithoutEmail(pageable);
+        PaginatedBusinessList businesses = hasEmail 
+            ? businessPersistenceService.findBusinessesWithEmail(page, size)
+            : businessPersistenceService.findBusinessesWithoutEmail(page, size);
         
         return ResponseEntity.ok(businesses);
     }
@@ -53,14 +50,13 @@ public class BusinessController {
      * @return the businesses in the specified country
      */
     @GetMapping("/filter/country")
-    public ResponseEntity<Page<Business>> filterBusinessesByCountry(
+    public ResponseEntity<PaginatedBusinessList> filterBusinessesByCountry(
             @RequestParam(value = "country", required = true) String country,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         log.info("Filtering businesses by country: {}", country);
         
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Business> businesses = businessPersistenceService.findBusinessesByCountry(country, pageable);
+        PaginatedBusinessList businesses = businessPersistenceService.findBusinessesByCountry(country, page, size);
         
         return ResponseEntity.ok(businesses);
     }

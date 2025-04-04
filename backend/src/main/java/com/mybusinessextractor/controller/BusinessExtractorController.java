@@ -87,7 +87,7 @@ public class BusinessExtractorController {
         MediaType mediaType;
         if ("csv".equals(format)) {
             mediaType = MediaType.parseMediaType("text/csv");
-        } else if ("excel".equals(format)) {
+        } else if ("xlsx".equals(format) || "excel".equals(format)) {
             mediaType = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         } else {
             mediaType = MediaType.APPLICATION_OCTET_STREAM;
