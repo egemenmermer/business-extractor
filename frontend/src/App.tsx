@@ -27,6 +27,8 @@ const AppContent: React.FC = () => {
     hasEmail,
     isCountryFilterActive,
     selectedCountry,
+    saveToDatabase,
+    setSaveToDatabase,
     businesses,
     exportData
   } = useAppContext();

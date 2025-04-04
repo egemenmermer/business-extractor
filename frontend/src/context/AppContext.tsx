@@ -16,6 +16,8 @@ interface AppContextType {
   isLoading: boolean;
   isPolling: boolean;
   isLoadingMore: boolean;
+  saveToDatabase: boolean;
+  setSaveToDatabase: (value: boolean) => void;
   addCategory: (category: string) => void;
   removeCategory: (category: string) => void;
   addLocation: (location: string) => void;
@@ -92,8 +94,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  // Always save to database without UI option
-  const saveToDatabase = true;
+  const [saveToDatabase, setSaveToDatabase] = useState<boolean>(true);
 
   // Poll for tasks status when searching
   useEffect(() => {
@@ -180,7 +181,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       const request: SearchRequest = {
         categories: selectedCategories,
         locations: selectedLocations,
-        saveToDatabase: true // Always true
+        saveToDatabase: saveToDatabase
       };
       
       await apiSearchBusinesses(request);
@@ -452,6 +453,8 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     isLoading,
     isPolling,
     isLoadingMore,
+    saveToDatabase,
+    setSaveToDatabase,
     addCategory,
     removeCategory,
     addLocation,
@@ -476,7 +479,7 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     isEmailFilterActive,
     hasEmail,
     isCountryFilterActive,
-    selectedCountry
+    selectedCountry,
   };
 
   return (
